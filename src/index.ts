@@ -7,6 +7,7 @@ import SVGCaptcha from 'svg-captcha';
 import sharp from 'sharp';
 import { Base64 } from 'js-base64';
 import { parseIPAddr } from './IpAddrUtil';
+import {PDKItemExpiredOrUsedError} from '@interactiveplus/pdk2021-common/dist/AbstractDataTypes/Error/PDKException';
 
 interface SimpleCaptchaInfo{
     captcha_id: string,
@@ -32,7 +33,10 @@ interface SimpleCaptchaEntity{
     mask_uid?: MaskUID,
     uid?: UserEntityUID,
     ip_address: string,
-    captcha_ans: string
+    captcha_ans: string,
+    issued: number,
+    expires: number,
+    valid: boolean
 }
 
 export type {SimpleCaptchaEntity};
@@ -67,6 +71,8 @@ class SimpleCaptchaFactory implements CaptchaFactory<SimpleCaptchaInfo,SimpleCap
     async generateCaptcha(client_id: APPClientID | null, ipAddress : string, mask_uid?: MaskUID, uid?: UserEntityUID, isDarkMode?: boolean) : Promise<SimpleCaptchaInfo>{
         let captcha = SVGCaptcha.create({size:this.getCaptchaAnsLen(),ignoreChars:'0o1i',noise:2})
         let sharpObj = sharp(captcha.data);
+        let currentTime = Math.round(Date.now() / 1000.0);
+
         if(isDarkMode){
             sharpObj = sharpObj.negate();
         }
@@ -83,7 +89,10 @@ class SimpleCaptchaFactory implements CaptchaFactory<SimpleCaptchaInfo,SimpleCap
             mask_uid: mask_uid,
             ip_address: ipAddress,
             uid: uid,
-            captcha_ans: captcha.text
+            captcha_ans: captcha.text,
+            issued: currentTime,
+            expires: currentTime + this.backendCaptchaSystemSetting.captchaAvailableDuration,
+            valid: true
         };
 
         let returendVal = await this.storageEngine.putCaptcha(putInfo,this.getCaptchaIDLen());
@@ -100,6 +109,7 @@ class SimpleCaptchaFactory implements CaptchaFactory<SimpleCaptchaInfo,SimpleCap
     }
     async verifyCaptcha(verifyInfo: SimpleCaptchaVerifyInfo, ipAddress: string, clientID?: string | null, user_uid?: UserEntityUID, mask_uid?: MaskUID): Promise<boolean> {
         let gotCaptcha = await this.storageEngine.getCaptcha(verifyInfo.captcha_id);
+        let currentTime = Math.round(Date.now() / 1000.0);
         if(gotCaptcha === undefined){
             return false;
         }
@@ -127,7 +137,14 @@ class SimpleCaptchaFactory implements CaptchaFactory<SimpleCaptchaInfo,SimpleCap
                 }
             }
         }
-        return gotCaptcha.captcha_ans === verifyInfo.captcha_ans;
+        
+        if(gotCaptcha.captcha_ans !== verifyInfo.captcha_ans){
+            return false;
+        }
+        if(gotCaptcha.expires < currentTime || (!gotCaptcha.valid)){
+            throw new PDKItemExpiredOrUsedError(['captcha_info']);
+        }
+        return true;
     }
     async verifyAndUseCaptcha(verifyInfo: SimpleCaptchaVerifyInfo, ipAddress: string, clientID?: string | null, user_uid?: UserEntityUID, mask_uid?: MaskUID): Promise<boolean> {
         let checkResult = await this.verifyCaptcha(verifyInfo,ipAddress,clientID,user_uid,mask_uid);
