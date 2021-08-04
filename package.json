@@ -1,7 +1,7 @@
 {
   "name": "@interactiveplus/pdk2021-backend-simplecaptcha",
   "version": "0.0.1",
-  "description": "MySQL + JWT Implementions of PDK2021 Abstract Backend Storage Interfaces. ",
+  "description": "Simple Implemention of PDK2021-BackendCore CaptchaFactory",
   "scripts": {
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -12,7 +12,6 @@
   "author": "Yunhao Cao & Siqi Wu",
   "license": "MIT",
   "devDependencies": {
-    "@types/simple-sha1": "^3.0.0",
     "@typescript-eslint/eslint-plugin": "^4.28.1",
     "@typescript-eslint/parser": "^4.28.1",
     "eslint": "^7.29.0",
